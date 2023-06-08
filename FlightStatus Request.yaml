@@ -1,0 +1,172 @@
+$integration: http://ibm.com/appconnect/integration/v2/integrationFile
+integration:
+  type: api
+  trigger-interfaces:
+    trigger-interface-1:
+      triggers:
+        requestFlightStatus:
+          assembly:
+            $ref: '#/integration/assemblies/assembly-1'
+          input-context:
+            data: FlightStatus
+          output-context:
+            data: FlightStatus
+      options:
+        resources:
+          - business-object: FlightStatus
+            model:
+              $ref: '#/models/FlightStatus'
+            triggers:
+              request: requestFlightStatus
+      type: api-trigger
+  action-interfaces:
+    action-interface-1:
+      type: api-action
+      business-object: message
+      connector-type: mq
+      account-name: Account 1
+      actions:
+        PUTMESSAGE: {}
+  assemblies:
+    assembly-1:
+      assembly:
+        execute:
+          - custom-action:
+              name: IBM MQ Put message on a queue
+              target:
+                $ref: '#/integration/action-interfaces/action-interface-1'
+              action: PUTMESSAGE
+              map:
+                customSchemas: {}
+                mappings:
+                  - message:
+                      template: '{{$Request}}'
+                  - messageType:
+                      template: TEXT
+                  - queueName:
+                      template: REQUESTQ
+                $map: http://ibm.com/appconnect/map/v1
+                input:
+                  - variable: Request
+                    $ref: '#/trigger/payload'
+                  - variable: flowDetails
+                    $ref: '#/flowDetails'
+          - response:
+              name: response-1
+              reply-maps:
+                - title: FlightStatus successfully add custom operation
+                  status-code: 200
+                  map:
+                    $map: http://ibm.com/appconnect/map/v1
+                    input:
+                      - variable: Request
+                        $ref: '#/trigger/payload'
+                      - variable: IBMMQPutmessageonaqueue
+                        $ref: >-
+                          #/node-output/IBM MQ Put message on a
+                          queue/response/payload
+                      - variable: flowDetails
+                        $ref: '#/flowDetails'
+                    mappings:
+                      - Date:
+                          template: '{{$Request.Date}}'
+                      - FlightNum:
+                          template: '{{$Request.FlightNum}}'
+                      - MsgRef:
+                          template: '{{$Request.MsgRef}}'
+                      - RequestStatus:
+                          template: '{{$IBMMQPutmessageonaqueue.msgId}}'
+                  input: []
+  name: FlightStatus Request
+models:
+  FlightStatus:
+    name: FlightStatus
+    properties:
+      FlightNum:
+        required: false
+        id: true
+        type: string
+      Date:
+        required: false
+        id: false
+        type: string
+      MsgRef:
+        required: false
+        id: false
+        type: string
+      RequestStatus:
+        required: false
+        id: false
+        type: string
+    plural: FlightStatus
+    description: ' '
+    operations:
+      request: '#/integration/assemblies/assembly-1'
+    interactions: {}
+    methods:
+      request:
+        name: Request
+        display:
+          name: FlightStatusRequest
+        accessType: WRITE
+        accepts:
+          - arg: data
+            type: FlightStatus
+            http:
+              source: body
+        returns:
+          arg: data
+          type: FlightStatus
+          root: true
+        http:
+          verb: POST
+          path: /Request
+x-ibm-configuration:
+  gateway: datapower-api-gateway
+  type: rest
+  phase: realized
+  enforced: true
+  testable: true
+  cors:
+    enabled: true
+  assembly:
+    execute:
+      - invoke:
+          title: Invoke flow
+          version: 2.0.0
+          verb: keep
+          target-url: $(app-connect-designer-url)$(request.path)
+          follow-redirects: false
+          timeout: 60
+          parameter-control:
+            type: blocklist
+          header-control:
+            type: blocklist
+          inject-proxy-headers: true
+          username: $(app-connect-designer-username)
+          password: $(app-connect-designer-password)
+          persistent-connection: true
+      - extract:
+          version: 2.0.0
+          title: extract
+          root: message.body
+          extracts: []
+          description: extract
+    finally: []
+    catch: []
+  properties:
+    app-connect-designer-url:
+      description: The URL of the App Connect Designer API endpoint.
+      encoded: false
+      value: >-
+        https://des-01-quickstart-ma-designer-https-integration.apps.cp4iblog01.3mhp.p1.openshiftapps.com
+    app-connect-designer-username:
+      description: >-
+        The username required for basic authentication to the App Connect
+        Designer API endpoint.
+      value: LGyk5ai3
+    app-connect-designer-password:
+      description: >-
+        The password required for basic authentication to the App Connect
+        Designer API endpoint.
+      value: RD62iL9UGhdmlg0jM1H7bwJ5BZfSEec8

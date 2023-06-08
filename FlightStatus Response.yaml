@@ -1,0 +1,130 @@
+$integration: http://ibm.com/appconnect/integration/v2/integrationFile
+integration:
+  type: api
+  trigger-interfaces:
+    trigger-interface-1:
+      triggers:
+        retrieveFlightStatusResponse:
+          assembly:
+            $ref: '#/integration/assemblies/assembly-1'
+          input-context:
+            data: FlightStatusResponse
+          output-context:
+            data: FlightStatusResponse
+      options:
+        resources:
+          - business-object: FlightStatusResponse
+            model:
+              $ref: '#/models/FlightStatusResponse'
+            triggers:
+              retrieve: retrieveFlightStatusResponse
+      type: api-trigger
+  action-interfaces:
+    action-interface-1:
+      type: api-action
+      business-object: message
+      connector-type: mq
+      account-name: Account 1
+      actions:
+        GETMESSAGE: {}
+  assemblies:
+    assembly-1:
+      assembly:
+        execute:
+          - custom-action:
+              name: IBM MQ Get message from a queue
+              target:
+                $ref: '#/integration/action-interfaces/action-interface-1'
+              action: GETMESSAGE
+              map:
+                mappings:
+                  - browseOnly:
+                      template: 'No'
+                  - queueName:
+                      template: RESPONSEQ
+                $map: http://ibm.com/appconnect/map/v1
+                input:
+                  - variable: api
+                    $ref: '#/trigger/api/parameters'
+                  - variable: flowDetails
+                    $ref: '#/flowDetails'
+          - response:
+              name: response-1
+              reply-maps:
+                - title: FlightStatusResponse successfully retrieved
+                  status-code: 200
+                  map:
+                    $map: http://ibm.com/appconnect/map/v1
+                    input:
+                      - variable: api
+                        $ref: '#/trigger/api/parameters'
+                      - variable: IBMMQGetmessagefromaqueue
+                        $ref: >-
+                          #/node-output/IBM MQ Get message from a
+                          queue/response/payload
+                      - variable: flowDetails
+                        $ref: '#/flowDetails'
+                    mappings:
+                      - ResponseMsg:
+                          expression: '$IBMMQGetmessagefromaqueue.message '
+                  input: []
+  name: FlightStatus Response
+models:
+  FlightStatusResponse:
+    name: FlightStatusResponse
+    properties:
+      MsgRef:
+        required: false
+        id: true
+        type: string
+      ResponseMsg:
+        required: false
+        id: false
+        type: {}
+    plural: FlightStatusResponse
+    description: ' '
+    operations:
+      retrieve: '#/integration/assemblies/assembly-1'
+    interactions: {}
+x-ibm-configuration:
+  gateway: datapower-api-gateway
+  type: rest
+  phase: realized
+  enforced: true
+  testable: true
+  cors:
+    enabled: true
+  assembly:
+    execute:
+      - invoke:
+          title: Invoke flow
+          version: 2.0.0
+          verb: keep
+          target-url: $(app-connect-designer-url)$(request.path)
+          follow-redirects: false
+          timeout: 60
+          parameter-control:
+            type: blacklist
+          header-control:
+            type: blacklist
+          inject-proxy-headers: true
+          username: $(app-connect-designer-username)
+          password: $(app-connect-designer-password)
+    catch: []
+    finally: []
+  properties:
+    app-connect-designer-url:
+      description: The URL of the App Connect Designer API endpoint.
+      encoded: false
+      value: >-
+        https://des-01-quickstart-ma-designer-https-integration.apps.cp4iblog01.3mhp.p1.openshiftapps.com
+    app-connect-designer-username:
+      description: >-
+        The username required for basic authentication to the App Connect
+        Designer API endpoint.
+      value: LGyk5ai3
+    app-connect-designer-password:
+      description: >-
+        The password required for basic authentication to the App Connect
+        Designer API endpoint.
+      value: RD62iL9UGhdmlg0jM1H7bwJ5BZfSEec8

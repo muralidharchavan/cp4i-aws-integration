@@ -1,0 +1,109 @@
+$integration: http://ibm.com/appconnect/integration/v2/integrationFile
+integration:
+  type: trigger-action
+  trigger-interfaces:
+    trigger-interface-1:
+      connector-type: mq
+      type: event-trigger
+      triggers:
+        CREATED:
+          input-context:
+            data: message
+          assembly:
+            $ref: '#/integration/assemblies/assembly-1'
+          options:
+            subscription:
+              queueName: REQUESTQ
+              browseOnly: 'No'
+      account-name: Account 1
+  action-interfaces:
+    action-interface-2:
+      type: api-action
+      business-object: message
+      connector-type: mq
+      account-name: Account 1
+      actions:
+        PUTMESSAGE: {}
+    action-interface-1:
+      type: api-action
+      business-object: function
+      connector-type: amazonlambda
+      account-name: Account 7
+      actions:
+        INVOKEFUNCTION: {}
+  assemblies:
+    assembly-1:
+      assembly:
+        execute:
+          - parse:
+              name: JSON Parser Parse
+              parse-format: json
+              source:
+                template: '{{$Trigger.message}}'
+                input:
+                  - variable: Trigger
+                    $ref: '#/trigger/payload'
+                  - variable: flowDetails
+                    $ref: '#/flowDetails'
+              sample-data: '{"FlightNum": "A1", "Date": "5-May-2023"}'
+              output-schema:
+                $schema: http://json-schema.org/draft-04/schema#
+                type: object
+                properties:
+                  FlightNum:
+                    type: string
+                  Date:
+                    type: string
+                title: Parsed JSON
+          - custom-action:
+              name: AWS Lambda Invoke function
+              target:
+                $ref: '#/integration/action-interfaces/action-interface-1'
+              action: INVOKEFUNCTION
+              map:
+                mappings:
+                  - FunctionArn:
+                      template: >-
+                        arn:aws:lambda:us-east-2:481118440516:function:FlightStatus2-murali
+                  - InvocationType:
+                      template: RequestResponse
+                  - LogType:
+                      template: Tail
+                  - PayloadReqProp:
+                      expression: '$JSONParserParse '
+                  - Qualifier:
+                      template: $LATEST
+                $map: http://ibm.com/appconnect/map/v1
+                input:
+                  - variable: Trigger
+                    $ref: '#/trigger/payload'
+                  - variable: JSONParserParse
+                    $ref: '#/node-output/JSON Parser Parse/response/payload'
+                  - variable: flowDetails
+                    $ref: '#/flowDetails'
+          - custom-action:
+              name: IBM MQ Put message on a queue
+              target:
+                $ref: '#/integration/action-interfaces/action-interface-2'
+              action: PUTMESSAGE
+              map:
+                customSchemas: {}
+                mappings:
+                  - message:
+                      template: '{{$AWSLambdaInvokefunction.Payload}}'
+                  - messageType:
+                      template: TEXT
+                  - queueName:
+                      template: RESPONSEQ
+                $map: http://ibm.com/appconnect/map/v1
+                input:
+                  - variable: Trigger
+                    $ref: '#/trigger/payload'
+                  - variable: JSONParserParse
+                    $ref: '#/node-output/JSON Parser Parse/response/payload'
+                  - variable: AWSLambdaInvokefunction
+                    $ref: '#/node-output/AWS Lambda Invoke function/response/payload'
+                  - variable: flowDetails
+                    $ref: '#/flowDetails'
+  name: FlightStatus Process
+models: {}
