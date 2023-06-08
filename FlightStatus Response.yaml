@@ -4,9 +4,9 @@ integration:
   trigger-interfaces:
     trigger-interface-1:
       triggers:
-        retrieveFlightStatusResponse:
+        retrieveallFlightStatusResponse:
           assembly:
-            $ref: '#/integration/assemblies/assembly-1'
+            $ref: '#/integration/assemblies/assembly-2'
           input-context:
             data: FlightStatusResponse
           output-context:
@@ -17,7 +17,7 @@ integration:
             model:
               $ref: '#/models/FlightStatusResponse'
             triggers:
-              retrieve: retrieveFlightStatusResponse
+              retrieveall: retrieveallFlightStatusResponse
       type: api-trigger
   action-interfaces:
     action-interface-1:
@@ -27,25 +27,28 @@ integration:
       account-name: Account 1
       actions:
         GETMESSAGE: {}
+    action-interface-2:
+      type: api-action
+      business-object: message
+      connector-type: mq
+      account-name: Account 1
+      actions:
+        GETMESSAGE: {}
   assemblies:
-    assembly-1:
+    assembly-2:
       assembly:
         execute:
           - custom-action:
               name: IBM MQ Get message from a queue
               target:
-                $ref: '#/integration/action-interfaces/action-interface-1'
+                $ref: '#/integration/action-interfaces/action-interface-2'
               action: GETMESSAGE
               map:
                 mappings:
-                  - browseOnly:
-                      template: 'No'
                   - queueName:
                       template: RESPONSEQ
                 $map: http://ibm.com/appconnect/map/v1
                 input:
-                  - variable: api
-                    $ref: '#/trigger/api/parameters'
                   - variable: flowDetails
                     $ref: '#/flowDetails'
           - response:
@@ -56,8 +59,6 @@ integration:
                   map:
                     $map: http://ibm.com/appconnect/map/v1
                     input:
-                      - variable: api
-                        $ref: '#/trigger/api/parameters'
                       - variable: IBMMQGetmessagefromaqueue
                         $ref: >-
                           #/node-output/IBM MQ Get message from a
@@ -65,8 +66,13 @@ integration:
                       - variable: flowDetails
                         $ref: '#/flowDetails'
                     mappings:
-                      - ResponseMsg:
-                          expression: '$IBMMQGetmessagefromaqueue.message '
+                      - FlightStatusResponse:
+                          foreach:
+                            input: '$IBMMQGetmessagefromaqueue '
+                            iterator: FlightStatusResponseItem
+                            mappings:
+                              - ResponseMsg:
+                                  expression: '$FlightStatusResponseItem.message '
                   input: []
   name: FlightStatus Response
 models:
@@ -84,8 +90,12 @@ models:
     plural: FlightStatusResponse
     description: ' '
     operations:
-      retrieve: '#/integration/assemblies/assembly-1'
-    interactions: {}
+      retrieveall: '#/integration/assemblies/assembly-2'
+    interactions:
+      retrieveall:
+        pagination-type: none
+        filterSupport:
+          queryablefields: []
 x-ibm-configuration:
   gateway: datapower-api-gateway
   type: rest
@@ -117,14 +127,14 @@ x-ibm-configuration:
       description: The URL of the App Connect Designer API endpoint.
       encoded: false
       value: >-
-        https://des-01-quickstart-ma-designer-https-integration.apps.cp4iblog01.3mhp.p1.openshiftapps.com
+        https://designer-designer-https-integration.apps.cp4iblog01.3mhp.p1.openshiftapps.com
     app-connect-designer-username:
       description: >-
         The username required for basic authentication to the App Connect
         Designer API endpoint.
-      value: LGyk5ai3
+      value: 9ZqS3rxH
     app-connect-designer-password:
       description: >-
         The password required for basic authentication to the App Connect
         Designer API endpoint.
-      value: RD62iL9UGhdmlg0jM1H7bwJ5BZfSEec8
+      value: v7fHl6G2J1mcEIsDUbnzqTVa8B3pxN95
