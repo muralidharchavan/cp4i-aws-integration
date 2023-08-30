@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation Template for Flight App
+
+Resources:
+  FlightInfoTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Flights
+      AttributeDefinitions:
+        - AttributeName: FlightNum
+          AttributeType: S
+        - AttributeName: Date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: FlightNum
+          KeyType: HASH
+        - AttributeName: Date
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  FlightInfoLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: FlightInfoLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: FlightInfoPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource:
+                  - !GetAtt FlightInfoTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:log-group:/aws/lambda/GetFlightStatus:*
+
+  GetFlightStatus:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: GetFlightStatus
+      Role: !GetAtt FlightInfoLambdaRole.Arn
+      Handler: index.lambda_handler
+      Runtime: python3.10
+      Timeout: 15
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+
+          dynamodb = boto3.resource('dynamodb')
+          table_name = os.environ['TABLE_NAME']
+
+          def lambda_handler(event, context):
+              body = None
+              status_code = 200
+              headers = {
+                  "Content-Type": "application/json",
+              }
+
+              try:
+                  table = dynamodb.Table(table_name)
+                  response = table.get_item(
+                      Key={
+                          "FlightNum": event["FlightNum"],
+                          "Date": event["Date"]
+                      }
+                  )
+                  item = response.get("Item")
+
+                  if item is None:
+                      body = f"No data for flight {event['FlightNum']} and date {event['Date']}"
+                  else:
+                      body = item
+
+              except Exception as err:
+                  status_code = 400
+                  body = str(err)
+
+              return {
+                  "statusCode": status_code,
+                  "body": json.dumps(body),
+                  "headers": headers
+              }
+
+      Environment:
+        Variables:
+          TABLE_NAME: Flights
